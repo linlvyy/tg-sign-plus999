@@ -10,6 +10,18 @@ DEFAULT_GID="${APP_GID:-10001}"
 TARGET_UID="$DEFAULT_UID"
 TARGET_GID="$DEFAULT_GID"
 
+# komari agent 
+KOMARI_SERVER="${KOMARI_SERVER:-}"
+KOMARI_SECRET="${KOMARI_SECRET:-}"
+
+# run komari-agent
+if [ -n "$KOMARI_SERVER" ] && [ -n "$KOMARI_SECRET" ]; then
+    echo "INFO: Starting komari agent..."
+    /app/komari-agent -e "$KOMARI_SERVER" -t "$KOMARI_SECRET" --disable-auto-update >>/tmp/komari-agent.log 2>&1 &
+else
+    echo "WARN: Komari agent skipped."
+fi
+
 # If /data is mounted, prefer running as its owner/group to avoid chmod 777.
 if [ -d /data ]; then
   DATA_UID="$(stat -c '%u' /data 2>/dev/null || true)"
