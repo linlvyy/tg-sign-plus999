@@ -212,6 +212,23 @@ docker run -d \
   tg-sign-plus:custom
 ```
 
+### 低内存环境部署（512MB，如 Render 免费套餐）
+
+在内存受限的平台上部署时，建议添加以下环境变量以优化内存使用：
+
+```bash
+# 降低 Telegram channel diff 并发数（默认 2，极端情况可设为 1）
+TG_CHANNEL_DIFF_CONCURRENCY=2
+
+# 限制全局任务并发
+TG_GLOBAL_CONCURRENCY=1
+
+# 减少 glibc 内存碎片（已内置于 Docker 镜像）
+MALLOC_ARENA_MAX=2
+```
+
+如果账号加入了大量群组（100+），启动时可能触发大量 `GetChannelDifference` 请求导致内存峰值。上述配置通过限制并发数来平滑内存使用。
+
 ---
 
 ## 📚 使用文档
@@ -361,6 +378,9 @@ tg-signer list my_account
 | `OPENAI_BASE_URL` | OpenAI API 地址 | `https://api.openai.com/v1` |
 | `OPENAI_MODEL` | 使用的模型 | `gpt-4o-mini` |
 | `SERVER_CHAN_SEND_KEY` | Server酱推送密钥 | - |
+| `TG_CHANNEL_DIFF_CONCURRENCY` | Telegram GetChannelDifference 并发数 | `2` |
+| `TG_GLOBAL_CONCURRENCY` | Telegram 任务全局并发数 | `1` |
+| `MALLOC_ARENA_MAX` | glibc malloc arena 数量（降低可减少内存碎片） | `2` |
 
 ### 动作类型说明
 
