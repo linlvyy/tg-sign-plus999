@@ -248,7 +248,7 @@ class SignTaskExecutor:
                         try:
                             for attempt in range(max_session_retries):
                                 try:
-                                    await signer.run_once(num_of_dialogs=20)
+                                    await signer.run_once(num_of_dialogs=0)
                                     last_exception = None
                                     break
                                 except Exception as e:
