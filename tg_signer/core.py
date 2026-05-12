@@ -82,6 +82,33 @@ sqlite3.connect = _patched_sqlite3_connect
 # Monkeypatch pyrogram.Client.invoke to add backpressure and retry logic for updates
 _original_invoke = BaseClient.invoke
 _get_channel_diff_semaphore = asyncio.Semaphore(int(os.environ.get("TG_CHANNEL_DIFF_CONCURRENCY", "2")))
+_original_handle_updates = BaseClient.handle_updates
+
+
+def _is_network_timeout_error(exc: Exception) -> bool:
+    err_str = str(exc).lower()
+    return (
+        isinstance(exc, asyncio.TimeoutError)
+        or "timeout" in err_str
+        or "connection" in err_str
+        or "network" in err_str
+    )
+
+
+async def _patched_handle_updates(self, *args, **kwargs):
+    try:
+        return await _original_handle_updates(self, *args, **kwargs)
+    except Exception as e:
+        if _is_network_timeout_error(e):
+            logging.getLogger("tg-signer").debug(
+                "Drop Telegram update batch due to network error: %s", e
+            )
+            return None
+        raise
+
+
+BaseClient.handle_updates = _patched_handle_updates
+
 
 async def _patched_invoke(self, query, *args, **kwargs):
     if isinstance(query, (raw.functions.updates.GetChannelDifference, raw.functions.updates.GetDifference)):
@@ -98,7 +125,7 @@ async def _patched_invoke(self, query, *args, **kwargs):
                     return await _original_invoke(self, query, *args, **kwargs)
                 except Exception as e:
                     err_str = str(e).lower()
-                    if isinstance(e, asyncio.TimeoutError) or "timeout" in err_str or "connection" in err_str or "flood" in err_str or "network" in err_str:
+                    if _is_network_timeout_error(e) or "flood" in err_str:
                         if attempt < max_retries:
                             delay = base_delay * (2 ** attempt) + random.uniform(0, 1)
                             if "flood" in err_str and hasattr(e, "value"):
