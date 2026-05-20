@@ -310,7 +310,8 @@ class SignTaskExecutor:
                 await asyncio.sleep(2)
 
         except Exception as e:
-            error_msg = f"任务执行出错: {str(e)}"
+            error_detail = str(e) or type(e).__name__
+            error_msg = f"任务执行出错: {error_detail}"
             flow_logger.append(
                 error_msg,
                 level="error",
