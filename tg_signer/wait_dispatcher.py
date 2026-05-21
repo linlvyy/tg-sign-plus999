@@ -37,6 +37,7 @@ ACTION_TYPES_WITH_HISTORY_FALLBACK = (
 
 BUTTON_ACTION_TYPES = (
     ClickKeyboardByTextAction,
+    ChooseOptionByImageAction,
     ClickButtonByCalculationProblemAction,
     ClickButtonByPoetryFillAction,
 )

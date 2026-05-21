@@ -1,9 +1,17 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from typing import Union
 
 from pyrogram import errors
+
+
+def _read_int_env(name: str, default: int, minimum: int = 1) -> int:
+    try:
+        return max(int(os.environ.get(name, default)), minimum)
+    except (TypeError, ValueError):
+        return default
 
 
 async def request_callback_answer(
@@ -16,7 +24,7 @@ async def request_callback_answer(
     callback_text_store=None,
     **kwargs,
 ) -> bool:
-    max_retries = 3
+    max_retries = _read_int_env("TG_CALLBACK_RETRIES", 3)
     for attempt in range(1, max_retries + 1):
         try:
             result = await client.request_callback_answer(
@@ -33,30 +41,54 @@ async def request_callback_answer(
                     meta={"chat_id": chat_id, "message_id": message_id},
                 )
             else:
-                log("点击完成")
+                log(
+                    "点击完成",
+                    stage="action",
+                    event="callback_answer_completed",
+                    meta={"chat_id": chat_id, "message_id": message_id},
+                )
             return True
         except errors.FloodWait as e:
             wait_seconds = max(int(getattr(e, "value", 1) or 1), 1)
             log(
                 f"触发 FloodWait，{wait_seconds}s 后重试 ({attempt}/{max_retries})",
                 level="WARNING",
+                stage="action",
+                event="callback_flood_wait",
+                meta={"chat_id": chat_id, "message_id": message_id, "attempt": attempt},
             )
             if attempt >= max_retries:
                 log(e, level="ERROR")
                 return False
             await asyncio.sleep(wait_seconds)
-        except TimeoutError:
+        except TimeoutError as e:
+            if attempt < max_retries:
+                log(
+                    f"回调请求超时，准备重试 ({attempt}/{max_retries})",
+                    level="WARNING",
+                    stage="action",
+                    event="callback_timeout_retry",
+                    meta={"chat_id": chat_id, "message_id": message_id, "attempt": attempt},
+                )
+                await asyncio.sleep(1)
+                continue
             log(
-                "回调请求超时，按已触发点击处理，后续依赖消息更新继续推进",
+                f"回调请求超时，点击未确认 ({attempt}/{max_retries})",
                 level="WARNING",
+                stage="action",
+                event="callback_timeout_failed",
+                meta={"chat_id": chat_id, "message_id": message_id, "attempt": attempt, "error_type": type(e).__name__},
             )
-            return True
+            return False
         except errors.BadRequest as e:
             err_text = str(e).upper()
             if "DATA_INVALID" in err_text:
                 log(
                     "按钮回调数据已失效，改为等待消息更新或历史消息继续执行",
                     level="WARNING",
+                    stage="action",
+                    event="callback_data_invalid",
+                    meta={"chat_id": chat_id, "message_id": message_id},
                 )
                 return False
             log(e, level="ERROR")

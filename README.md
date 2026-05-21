@@ -226,6 +226,7 @@ TG_GLOBAL_CONCURRENCY=1
 # 限制 Telegram RPC 重试和连接等待时间，避免网络异常时长时间堆积后台任务
 TG_RPC_RETRIES=1
 TG_RPC_TIMEOUT=15
+TG_CALLBACK_RETRIES=3
 TG_CONNECT_TIMEOUT=20
 TG_TCP_TIMEOUT=8
 SIGN_TASK_RUN_TIMEOUT=180
@@ -392,6 +393,7 @@ tg-signer list my_account
 | `TG_GLOBAL_CONCURRENCY` | Telegram 任务全局并发数 | `1` |
 | `TG_RPC_RETRIES` | Telegram RPC 默认重试次数 | `1` |
 | `TG_RPC_TIMEOUT` | Telegram RPC 默认超时秒数 | `15` |
+| `TG_CALLBACK_RETRIES` | Telegram 按钮回调超时重试次数 | `3` |
 | `TG_CONNECT_TIMEOUT` | Telegram 连接/认证阶段超时秒数 | `20` |
 | `TG_TCP_TIMEOUT` | Telegram 底层 TCP 连接超时秒数 | `8` |
 | `SIGN_TASK_RUN_TIMEOUT` | 单次签到任务总超时秒数 | `180` |
