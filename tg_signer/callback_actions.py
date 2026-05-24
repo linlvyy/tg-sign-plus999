@@ -22,9 +22,11 @@ async def request_callback_answer(
     callback_data: Union[str, bytes],
     log,
     callback_text_store=None,
+    trust_consumed_after_timeout: bool = False,
     **kwargs,
 ) -> bool:
     max_retries = _read_int_env("TG_CALLBACK_RETRIES", 3)
+    had_timeout = False
     for attempt in range(1, max_retries + 1):
         try:
             result = await client.request_callback_answer(
@@ -62,6 +64,7 @@ async def request_callback_answer(
                 return False
             await asyncio.sleep(wait_seconds)
         except TimeoutError as e:
+            had_timeout = True
             if attempt < max_retries:
                 log(
                     f"回调请求超时，准备重试 ({attempt}/{max_retries})",
@@ -83,6 +86,15 @@ async def request_callback_answer(
         except errors.BadRequest as e:
             err_text = str(e).upper()
             if "DATA_INVALID" in err_text:
+                if had_timeout and trust_consumed_after_timeout:
+                    log(
+                        "按钮回调数据已失效，但前一次点击请求已超时送出，按已点击继续等待后续消息",
+                        level="WARNING",
+                        stage="action",
+                        event="callback_data_invalid_after_timeout",
+                        meta={"chat_id": chat_id, "message_id": message_id},
+                    )
+                    return True
                 log(
                     "按钮回调数据已失效，改为等待消息更新或历史消息继续执行",
                     level="WARNING",

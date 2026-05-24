@@ -47,6 +47,7 @@ async def click_keyboard_by_text(
                         message.chat.id,
                         message.id,
                         btn.callback_data,
+                        trust_consumed_after_timeout=True,
                     )
             log(
                 f"Target button '{action.text}' not found in inline keyboard.",
