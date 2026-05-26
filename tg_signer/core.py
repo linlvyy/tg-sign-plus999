@@ -419,7 +419,24 @@ class BaseUserWorker(Generic[ConfigT]):
         :param kwargs:
         :return:
         """
-        message = await self.app.send_message(chat_id, text, **kwargs)
+        try:
+            send_timeout = max(float(os.environ.get("TG_SEND_MESSAGE_TIMEOUT", "20") or "20"), 5.0)
+        except (TypeError, ValueError):
+            send_timeout = 20.0
+        try:
+            message = await asyncio.wait_for(
+                self.app.send_message(chat_id, text, **kwargs),
+                timeout=send_timeout,
+            )
+        except TimeoutError:
+            self.log(
+                f"发送消息超时: {text}",
+                level="WARNING",
+                stage="action",
+                event="message_send_timeout",
+                meta={"chat_id": chat_id, "text": text, "timeout": send_timeout},
+            )
+            raise
         self.log(
             f"消息已发送: {text}",
             stage="action",

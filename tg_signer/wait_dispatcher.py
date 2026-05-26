@@ -4,6 +4,8 @@ import asyncio
 import time
 from typing import Awaitable, Callable
 
+from pyrogram import errors
+
 from tg_signer.config import (
     ActionT,
     AssertSuccessByTextAction,
@@ -40,6 +42,12 @@ BUTTON_ACTION_TYPES = (
     ChooseOptionByImageAction,
     ClickButtonByCalculationProblemAction,
     ClickButtonByPoetryFillAction,
+)
+
+RETRYABLE_ACTION_ERRORS = tuple(
+    error_type
+    for error_type in (TimeoutError, asyncio.TimeoutError, getattr(errors, "Timeout", None))
+    if error_type is not None
 )
 
 
@@ -89,7 +97,19 @@ async def wait_for_action(
             event="send_text_started",
             meta={"chat_id": chat.chat_id, "text": action.text, "delete_after": chat.delete_after},
         )
-        await send_message(chat.chat_id, action.text, chat.delete_after)
+        try:
+            await send_message(chat.chat_id, action.text, chat.delete_after)
+        except RETRYABLE_ACTION_ERRORS as e:
+            log(
+                f"发送文本超时: {e}",
+                level="WARNING",
+                stage="action",
+                event="send_text_timeout",
+                meta={"chat_id": chat.chat_id, "text": action.text, "error_type": type(e).__name__},
+            )
+            raise BusinessRetryableError(
+                f"Send text timed out. chat_id={chat.chat_id}, text={action.text}"
+            ) from e
         log(
             f"发送文本完成: {action.text}",
             stage="action",
@@ -104,7 +124,19 @@ async def wait_for_action(
             event="send_dice_started",
             meta={"chat_id": chat.chat_id, "emoji": action.dice, "delete_after": chat.delete_after},
         )
-        await send_dice(chat.chat_id, action.dice, chat.delete_after)
+        try:
+            await send_dice(chat.chat_id, action.dice, chat.delete_after)
+        except RETRYABLE_ACTION_ERRORS as e:
+            log(
+                f"发送骰子超时: {e}",
+                level="WARNING",
+                stage="action",
+                event="send_dice_timeout",
+                meta={"chat_id": chat.chat_id, "emoji": action.dice, "error_type": type(e).__name__},
+            )
+            raise BusinessRetryableError(
+                f"Send dice timed out. chat_id={chat.chat_id}, emoji={action.dice}"
+            ) from e
         log(
             f"发送骰子完成: {action.dice}",
             stage="action",
@@ -152,7 +184,24 @@ async def wait_for_action(
                     continue
                 processed_versions.add(version)
                 context.waiting_message = message
-                ok = await dispatch_action(action, message)
+                try:
+                    ok = await dispatch_action(action, message)
+                except RETRYABLE_ACTION_ERRORS as e:
+                    log(
+                        f"动作执行超时: {e}",
+                        level="WARNING",
+                        stage="action",
+                        event="action_dispatch_timeout",
+                        meta={
+                            "chat_id": chat.chat_id,
+                            "action": str(action),
+                            "message_id": getattr(message, "id", None),
+                            "error_type": type(e).__name__,
+                        },
+                    )
+                    raise BusinessRetryableError(
+                        f"Action timed out. chat_id={chat.chat_id}, action={action}"
+                    ) from e
                 if ok:
                     log(
                         f"动作命中实时消息: {readable_message(message)}",
@@ -188,6 +237,22 @@ async def wait_for_action(
                 for message in history_messages:
                     try:
                         ok = await dispatch_action(action, message)
+                    except RETRYABLE_ACTION_ERRORS as e:
+                        log(
+                            f"历史消息回退执行超时: {e}",
+                            level="WARNING",
+                            stage="action",
+                            event="history_dispatch_timeout",
+                            meta={
+                                "chat_id": chat.chat_id,
+                                "action": str(action),
+                                "message_id": getattr(message, 'id', None),
+                                "error_type": type(e).__name__,
+                            },
+                        )
+                        raise BusinessRetryableError(
+                            f"Action timed out during history fallback. chat_id={chat.chat_id}, action={action}"
+                        ) from e
                     except Exception as e:
                         log(
                             f"历史消息回退执行失败: {e}",

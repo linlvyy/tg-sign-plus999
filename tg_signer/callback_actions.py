@@ -65,6 +65,15 @@ async def request_callback_answer(
             await asyncio.sleep(wait_seconds)
         except TimeoutError as e:
             had_timeout = True
+            if trust_consumed_after_timeout:
+                log(
+                    "回调请求超时，按已触发点击处理，后续依赖消息更新继续推进",
+                    level="WARNING",
+                    stage="action",
+                    event="callback_timeout_trusted",
+                    meta={"chat_id": chat_id, "message_id": message_id, "attempt": attempt},
+                )
+                return True
             if attempt < max_retries:
                 log(
                     f"回调请求超时，准备重试 ({attempt}/{max_retries})",
