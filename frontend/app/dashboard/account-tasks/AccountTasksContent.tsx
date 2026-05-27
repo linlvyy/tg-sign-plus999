@@ -9,7 +9,6 @@ import {
     deleteSignTask,
     runSignTask,
     getSignTaskHistory,
-    getSignTaskEventEngineReport,
     getAccountChats,
     refreshAccountChats,
     searchAccountChats,
@@ -22,7 +21,6 @@ import {
     SignTask,
     SignTaskFlowItem,
     SignTaskHistoryItem,
-    SignTaskCanaryReport,
     ChatInfo,
     CreateSignTaskRequest,
     SchedulerStatus,
@@ -251,26 +249,6 @@ const diagnosticLabel = (status: string | undefined, isZh: boolean) => {
         case "fail": return isZh ? "诊断失败" : "Failed checks";
         default: return isZh ? "未诊断" : "Unknown";
     }
-};
-
-const eventHealthStatusLabel = (status: string | undefined, isZh: boolean) => {
-    switch (status) {
-        case "pass": return isZh ? "通过" : "Pass";
-        case "warn": return isZh ? "需观察" : "Watch";
-        case "fail": return isZh ? "失败" : "Fail";
-        case "missing": return isZh ? "无历史" : "No history";
-        case "unconfigured": return isZh ? "未配置" : "Missing config";
-        case "stale": return isZh ? "已过期" : "Stale";
-        default: return isZh ? "未知" : "Unknown";
-    }
-};
-
-const eventHealthCheckSummary = (task: SignTaskCanaryReport["targets"][number]["tasks"][number], isZh: boolean) => {
-    const checks = task.config_checks || [];
-    const importantChecks = checks.filter((check) => check.status === "fail" || check.status === "warn").slice(0, 2);
-    if (importantChecks.length === 0) return "";
-    const prefix = isZh ? "配置检查" : "Config";
-    return `${prefix}: ${importantChecks.map((check) => check.label || check.id).join(", ")}`;
 };
 
 const formatInlineMeta = (meta: SignTaskFlowItem["meta"] | undefined, detailed = false, text?: string) => {
@@ -829,92 +807,6 @@ const TaskItem = memo(({ task, loading, isRunning, schedulerItem, schedulerTimez
 
 TaskItem.displayName = "TaskItem";
 
-const EventEngineHealthPanel = ({ report, loading, onRefresh, isZh }: {
-    report: SignTaskCanaryReport | null;
-    loading: boolean;
-    onRefresh: () => void;
-    isZh: boolean;
-}) => {
-    const targets = report?.targets || [];
-    return (
-        <section className="glass-panel p-4 md:p-5">
-            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                        <Robot weight="bold" size={18} className="text-[var(--accent)]" />
-                        <h2 className="text-base font-semibold text-[var(--text-primary)]">
-                            {isZh ? "事件引擎健康" : "Event engine health"}
-                        </h2>
-                        <StatusBadge tone={diagnosticTone(report?.status) as any} className="normal-case tracking-normal">
-                            {eventHealthStatusLabel(report?.status, isZh)}
-                        </StatusBadge>
-                    </div>
-                    <div className="mt-1 text-xs text-[var(--text-tertiary)]">
-                        {isZh ? "基于当前账号真实任务配置和最近运行历史生成" : "Generated from this account's tasks and latest run history"}
-                    </div>
-                </div>
-                <Button size="sm" variant="secondary" onClick={onRefresh} disabled={loading}>
-                    {loading ? <Spinner className="animate-spin" size={14} /> : <ArrowClockwise weight="bold" size={14} />}
-                    {isZh ? "刷新" : "Refresh"}
-                </Button>
-            </div>
-
-            <div className="mt-4 grid gap-3 md:grid-cols-3">
-                {targets.length > 0 ? targets.map((target) => (
-                    <div key={target.id} className="rounded-xl border border-[var(--border-secondary)] bg-[var(--bg-tertiary)] px-4 py-3">
-                        <div className="flex items-center justify-between gap-2">
-                            <div className="min-w-0 truncate text-sm font-semibold text-[var(--text-primary)]">
-                                {target.label}
-                            </div>
-                            <StatusBadge tone={diagnosticTone(target.status) as any} className="shrink-0 normal-case tracking-normal">
-                                {eventHealthStatusLabel(target.status, isZh)}
-                            </StatusBadge>
-                        </div>
-                        <div className="mt-2 line-clamp-2 text-xs leading-5 text-[var(--text-secondary)]">
-                            {target.summary}
-                        </div>
-                        {target.tasks.length > 0 ? (
-                            <div className="mt-2 space-y-1">
-                                {target.tasks.slice(0, 2).map((task) => (
-                                    <div key={`${task.account_name}/${task.task_name}`} className="space-y-0.5 text-[11px] leading-5 text-[var(--text-tertiary)]">
-                                        <div className="truncate">
-                                            {task.account_name}/{task.task_name} · {eventHealthStatusLabel(task.status, isZh)}
-                                        </div>
-                                        <div className="truncate">
-                                            {isZh ? "配置" : "Config"}={eventHealthStatusLabel(task.config_status || "unknown", isZh)}
-                                            {" · "}
-                                            {isZh ? "运行" : "Run"}={eventHealthStatusLabel(task.run_status || "unknown", isZh)}
-                                            {task.latest_time ? ` · ${task.latest_time}` : ""}
-                                        </div>
-                                        {eventHealthCheckSummary(task, isZh) ? (
-                                            <div className="truncate text-[var(--text-secondary)]">
-                                                {eventHealthCheckSummary(task, isZh)}
-                                            </div>
-                                        ) : null}
-                                        {task.latest_summary ? (
-                                            <div className="line-clamp-2 leading-5 text-[var(--text-secondary)]">
-                                                {task.latest_summary}
-                                            </div>
-                                        ) : null}
-                                    </div>
-                                ))}
-                            </div>
-                        ) : target.expected ? (
-                            <div className="mt-2 truncate text-[11px] leading-5 text-[var(--text-tertiary)]">
-                                {isZh ? "期望" : "Expected"}: {(target.expected.names || []).slice(0, 2).join(", ")} · {(target.expected.chat_ids || []).join(", ")}
-                            </div>
-                        ) : null}
-                    </div>
-                )) : (
-                    <div className="rounded-xl border border-dashed border-[var(--border-secondary)] bg-[var(--bg-tertiary)] px-4 py-5 text-sm text-[var(--text-tertiary)] md:col-span-3">
-                        {isZh ? "暂无事件引擎诊断数据" : "No event-engine diagnostics yet"}
-                    </div>
-                )}
-            </div>
-        </section>
-    );
-};
-
 export default function AccountTasksContent() {
     const router = useRouter();
     const { t, language } = useLanguage();
@@ -930,8 +822,6 @@ export default function AccountTasksContent() {
     const [tasks, setTasks] = useState<SignTask[]>([]);
     const [chats, setChats] = useState<ChatInfo[]>([]);
     const [schedulerStatus, setSchedulerStatus] = useState<SchedulerStatus | null>(null);
-    const [eventEngineReport, setEventEngineReport] = useState<SignTaskCanaryReport | null>(null);
-    const [eventEngineReportLoading, setEventEngineReportLoading] = useState(false);
     const [chatSearch, setChatSearch] = useState("");
     const [chatSearchResults, setChatSearchResults] = useState<ChatInfo[]>([]);
     const [chatSearchLoading, setChatSearchLoading] = useState(false);
@@ -1124,14 +1014,12 @@ export default function AccountTasksContent() {
     const loadData = useCallback(async () => {
         try {
             setLoading(true);
-            const [tasksData, schedulerData, eventEngineData] = await Promise.all([
+            const [tasksData, schedulerData] = await Promise.all([
                 listSignTasks(accountName),
                 getSchedulerStatus(accountName),
-                getSignTaskEventEngineReport(accountName),
             ]);
             setTasks(tasksData);
             setSchedulerStatus(schedulerData);
-            setEventEngineReport(eventEngineData);
         } catch (err: any) {
             if (handleAccountSessionInvalid(err)) return;
             const toast = addToastRef.current;
@@ -1143,30 +1031,6 @@ export default function AccountTasksContent() {
             setLoading(false);
         }
     }, [accountName, formatErrorMessage, handleAccountSessionInvalid]);
-
-    const refreshEventEngineReport = useCallback(async (silent = false) => {
-        if (!token || !accountName) return;
-        try {
-            if (!silent) {
-                setEventEngineReportLoading(true);
-            }
-            const report = await getSignTaskEventEngineReport(accountName);
-            setEventEngineReport(report);
-            return report;
-        } catch (err: any) {
-            if (handleAccountSessionInvalid(err)) return;
-            if (!silent) {
-                const toast = addToastRef.current;
-                if (toast) {
-                    toast(formatErrorMessage("load_failed", err), "error");
-                }
-            }
-        } finally {
-            if (!silent) {
-                setEventEngineReportLoading(false);
-            }
-        }
-    }, [token, accountName, formatErrorMessage, handleAccountSessionInvalid]);
 
     const loadChatCache = useCallback(async (options?: { forceRefresh?: boolean; autoRefreshIfExpired?: boolean; ensureExists?: boolean; silent?: boolean }) => {
         if (!token || !accountName) return;
@@ -1307,16 +1171,14 @@ export default function AccountTasksContent() {
         if (!token || !historyTaskName) return;
         const timer = setInterval(async () => {
             try {
-                const [logs, latestTasks, latestSchedulerStatus, latestEventEngineReport] = await Promise.all([
+                const [logs, latestTasks, latestSchedulerStatus] = await Promise.all([
                     getSignTaskHistory(historyTaskName, accountName, 30),
                     listSignTasks(accountName),
                     getSchedulerStatus(accountName),
-                    getSignTaskEventEngineReport(accountName),
                 ]);
                 setHistoryLogs(logs);
                 setTasks(latestTasks);
                 setSchedulerStatus(latestSchedulerStatus);
-                setEventEngineReport(latestEventEngineReport);
             } catch {}
         }, 2000);
         return () => clearInterval(timer);
@@ -1340,16 +1202,14 @@ export default function AccountTasksContent() {
                 setLiveMonitorTaskName(null);
                 try {
                     const currentHistoryTaskName = historyTaskNameRef.current;
-                    const [latestTasks, latestRunLogs, currentHistoryLogs, latestSchedulerStatus, latestEventEngineReport] = await Promise.all([
+                    const [latestTasks, latestRunLogs, currentHistoryLogs, latestSchedulerStatus] = await Promise.all([
                         listSignTasks(accountName),
                         getSignTaskHistory(liveMonitorTaskName, accountName, 1),
                         currentHistoryTaskName ? getSignTaskHistory(currentHistoryTaskName, accountName, 30) : Promise.resolve(null),
                         getSchedulerStatus(accountName),
-                        getSignTaskEventEngineReport(accountName),
                     ]);
                     setTasks(latestTasks);
                     setSchedulerStatus(latestSchedulerStatus);
-                    setEventEngineReport(latestEventEngineReport);
                     if (currentHistoryLogs) {
                         setHistoryLogs(currentHistoryLogs);
                     }
@@ -1993,13 +1853,6 @@ export default function AccountTasksContent() {
                         </div>
                     </div>
                 </section>
-
-                <EventEngineHealthPanel
-                    report={eventEngineReport}
-                    loading={eventEngineReportLoading}
-                    onRefresh={() => void refreshEventEngineReport(false)}
-                    isZh={isZh}
-                />
 
                 <section className="space-y-4">
                     <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
