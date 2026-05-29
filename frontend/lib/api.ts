@@ -526,11 +526,6 @@ export type SignTaskAction =
   | {
       action: 9;
       keywords: string[];
-      checked_keywords?: string[];
-      retry_keywords?: string[];
-      fail_keywords?: string[];
-      account_fail_keywords?: string[];
-      ignore_keywords?: string[];
     };
 
 export interface SignTaskChat {

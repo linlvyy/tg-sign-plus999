@@ -389,7 +389,8 @@ SUPPORT_ACTION_REQUIRED_FIELDS = {
     3: ("text",),
     9: ("keywords",),
 }
-SUPPORT_ACTION_OPTIONAL_KEYWORD_FIELDS = (
+SUPPORT_ACTION_OPTIONAL_KEYWORD_FIELDS = ()
+SUPPORT_ACTION_DEPRECATED_ASSERT_KEYWORD_FIELDS = (
     "checked_keywords",
     "retry_keywords",
     "fail_keywords",
@@ -543,6 +544,8 @@ def normalize_sign_action(action: Dict[str, Any]) -> Dict[str, Any]:
         _normalize_reply_image_action_config(normalized)
 
     if action_id == SUPPORT_ACTION_ASSERT_SUCCESS_ID:
+        for field_name in SUPPORT_ACTION_DEPRECATED_ASSERT_KEYWORD_FIELDS:
+            normalized.pop(field_name, None)
         keywords = normalized.get("keywords")
         if not isinstance(keywords, list):
             raise ValueError("成功判定动作的 keywords 必须为数组")

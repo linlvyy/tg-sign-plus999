@@ -26,6 +26,8 @@ _CHAT_INT_FIELDS = {
 _CHAT_BOOL_FIELDS = {field.source for field in EVENT_BOOLEAN_COUNT_FIELDS}
 _ASSERT_KEYWORD_FIELDS = {
     "keywords",
+}
+_DEPRECATED_ASSERT_KEYWORD_FIELDS = {
     "checked_keywords",
     "retry_keywords",
     "fail_keywords",
@@ -211,6 +213,9 @@ def _normalize_action(action: Any) -> Any:
     for field in _ASSERT_KEYWORD_FIELDS:
         if field in normalized:
             normalized[field] = _normalize_string_list(normalized[field])
+    if _safe_int(normalized.get("action")) == 9:
+        for field in _DEPRECATED_ASSERT_KEYWORD_FIELDS:
+            normalized.pop(field, None)
     if _safe_int(normalized.get("action")) == 6:
         if "caption_pattern" in normalized:
             caption_pattern = _normalize_optional_text(normalized["caption_pattern"])

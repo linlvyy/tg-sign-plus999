@@ -217,7 +217,7 @@ class SupportAction(int, Enum):
             SupportAction.REPLY_BY_IMAGE_RECOGNITION: "AI image recognition then send text",
             SupportAction.CLICK_BUTTON_BY_CALCULATION_PROBLEM: "AI calculation then click button",
             SupportAction.CLICK_BUTTON_BY_POETRY_FILL: "AI fill poetry then click button",
-            SupportAction.ASSERT_SUCCESS_BY_TEXT: "根据最后一条消息判断签到成功",
+            SupportAction.ASSERT_SUCCESS_BY_TEXT: "根据消息文本判断任务结果",
         }[self]
 
 
@@ -470,19 +470,9 @@ class AssertSuccessByTextAction(SignAction):
         SupportAction.ASSERT_SUCCESS_BY_TEXT
     )
     keywords: List[str]
-    checked_keywords: List[str] = Field(default_factory=list)
-    retry_keywords: List[str] = Field(default_factory=list)
-    fail_keywords: List[str] = Field(default_factory=list)
-    account_fail_keywords: List[str] = Field(default_factory=list)
-    ignore_keywords: List[str] = Field(default_factory=list)
 
     @validator(
         "keywords",
-        "checked_keywords",
-        "retry_keywords",
-        "fail_keywords",
-        "account_fail_keywords",
-        "ignore_keywords",
         pre=True,
         always=True,
     )

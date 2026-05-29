@@ -400,7 +400,7 @@ tg-signer list my_account
 | `TG_RPC_TIMEOUT` | Telegram RPC 默认超时秒数 | `30` |
 | `TG_CALLBACK_RETRIES` | Telegram 按钮回调超时重试次数 | `3` |
 | `TG_SEND_MESSAGE_TIMEOUT` | 发送 Telegram 文本消息超时秒数 | `20` |
-| `TG_SUCCESS_ASSERT_TIMEOUT` | 签到成功关键字等待秒数 | `30` |
+| `TG_SUCCESS_ASSERT_TIMEOUT` | 结果关键词等待秒数 | `30` |
 | `TG_AI_REQUEST_TIMEOUT` | AI/OCR/视觉识别单次请求超时秒数 | `45` |
 | `TG_CONNECT_TIMEOUT` | Telegram 连接/认证阶段超时秒数 | `20` |
 | `SIGN_TASK_ACCOUNT_LOCK_TIMEOUT` | 签到任务等待同账号执行锁的最长秒数 | `300` |
@@ -429,11 +429,11 @@ tg-signer list my_account
 | `6` | AI 图片文字识别并回复 | 可选 `caption_pattern`: 图片 caption 正则；可选 `captcha_lengths`: 验证码长度列表；可选 `captcha_charset`: 允许字符；可选 `captcha_case`: `preserve`/`upper`/`lower`；可选 `reply_to_message`: 是否回复到验证码图片消息 |
 | `7` | AI 计算题点击按钮 | 无 |
 | `8` | AI 诗词填空点击按钮 | 无 |
-| `9` | 判断签到结果 | `keywords`: 成功关键词列表；可选 `checked_keywords`、`retry_keywords`、`fail_keywords`、`account_fail_keywords`、`ignore_keywords` |
+| `9` | 判断签到结果 | `keywords`: 结果关键词列表；命中任意关键词即视为完成 |
 
 ### 签到执行引擎
 
-签到任务统一使用消息事件驱动引擎：收到机器人消息后即时分类处理按钮、验证码图片、计算题、成功/已签到/失败结果。旧导入配置中即使包含 `engine: legacy` 也会被归一化为 `event`，不再提供按动作列表逐步等待和执行的兼容流水线。
+签到任务统一使用消息事件驱动引擎：收到机器人消息后即时处理按钮、验证码图片、计算题，并只根据用户在 `action: 9` 中配置的 `keywords` 判断任务结果。旧导入配置中即使包含 `engine: legacy` 也会被归一化为 `event`，不再提供按动作列表逐步等待和执行的兼容流水线。
 
 事件引擎只有在动作列表包含 `action: 9`（成功关键字判断）时才会等待最终结果；如果任务只是发送消息、投骰子或点击按钮，不需要确认机器人返回结果，可以省略 `action: 9`，动作完成后会直接视为成功。
 
@@ -468,12 +468,7 @@ tg-signer list my_account
         },
         {
           "action": 9,
-          "keywords": ["签到成功"],
-          "checked_keywords": ["签到过了", "已经签到", "已签到"],
-          "retry_keywords": ["验证码错误", "验证失败"],
-          "fail_keywords": ["次数过多"],
-          "account_fail_keywords": ["未绑定", "请先加入"],
-          "ignore_keywords": ["欢迎使用", "请选择功能"]
+          "keywords": ["签到成功", "签到过了"]
         }
       ]
     }
@@ -493,7 +488,7 @@ tg-signer list my_account
 | `TG_EVENT_ENGINE_ACTION_TIMEOUT` | 单个响应动作超时秒数；超时会记录 `event_engine_response_action_timeout` 并触发事件流内部重试 | `45` |
 | `TG_EVENT_ENGINE_HISTORY_LIMIT` | 扫描最近历史消息条数；默认扫描最近 3 条，会在启动入口命令前和运行等待期间低频补漏，适合救援漏掉的验证码/结果消息；设为 `0` 可关闭 | `3` |
 | `TG_EVENT_ENGINE_HISTORY_RESCUE_INTERVAL` | 运行等待期间历史补漏扫描间隔秒数，仅在 `TG_EVENT_ENGINE_HISTORY_LIMIT` 或 chat `event_history_limit` 大于 0 时生效 | `5` |
-| `TG_EVENT_ENGINE_HISTORY_RESULT_MAX_AGE` | 启动前历史扫描允许消费的消息最大年龄秒数，避免把很久以前的已签到/验证码消息当作本次结果；设为 `0` 表示不限制 | `600` |
+| `TG_EVENT_ENGINE_HISTORY_RESULT_MAX_AGE` | 启动前历史扫描允许消费的消息最大年龄秒数，避免把很久以前的结果/验证码消息当作本次结果；设为 `0` 表示不限制 | `600` |
 | `TG_EVENT_ENGINE_AI_FALLBACK` | 未配置的后续交互是否启用 AI 兜底；默认关闭。建议只对会临时弹出额外验证按钮、且动作列表无法稳定覆盖的任务开启 | `0` |
 
 启动前历史扫描只消费明确结果消息和可回复的图片验证码；旧菜单按钮、图片选项、计算题点击和文本计算题不会推进当前流程，避免旧 callback 或旧题目跳过 fresh 入口命令。运行期间的历史补漏仍会处理本次入口之后的新消息和已跟踪消息编辑。
@@ -502,16 +497,14 @@ tg-signer list my_account
 
 任务历史记录会保存结构化 `flow_items`，并自动生成 `diagnostics` 诊断摘要。后台历史弹窗会展示“诊断通过 / 需观察 / 诊断失败”和每个检查项。CLI canary 与 API 报告会基于当前账号真实任务配置和最近运行历史汇总，不绑定任何特定 bot，也不是独立总览模块。做回归时重点看：
 
-- `事件引擎启动`、预期按钮点击、验证码识别/回复、成功/已签到结果命中是否通过。
+- `事件引擎启动`、预期按钮点击、验证码识别/回复、结果关键词命中是否通过。
 - `可信按钮超时后继续推进` 是否通过，用于验证“签到”“我不是机器人”这类 callback timeout 不会卡死。
 - `消息驱动动作推进` 出现时，表示某条机器人消息确实触发了响应动作从第 N 步推进到第 N+1 步，便于确认流程不是按脚本盲目前进。
 - `图片选项题严格回调` 是否通过，用于确认 `action=4` 不会因默认推进误判。
-- `结果命中后不再 OCR` 是否通过，用于确认成功/已签到图片 caption 命中后不会再次识别验证码。
+- `结果命中后不再 OCR` 是否通过，用于确认图片 caption 命中结果关键词后不会再次识别验证码。
 - `历史已处理消息编辑复查` 出现时，表示运行期间漏掉了实时 edited update，但事件引擎通过历史补漏复查启动历史或实时流程中已处理过的消息编辑版本救回了结果。
 - `无回调按钮跳过` 出现时，表示匹配到同名按钮但它不是可回调按钮，事件引擎已跳过以免点错 URL/菜单按钮。
 - `按钮回调未确认` 出现时，表示 Telegram 没确认本次 callback；事件引擎会保留重试空间，不把这次点击当作已经可靠完成。
-- `失败提示阻止继续 OCR` 出现时，表示验证码/响应动作前已识别到失败或重试提示，避免继续识别错误图片。
-- `启动历史旧失败跳过` 出现时，表示启动补历史时看到了旧的硬失败消息，但没有把它当成本次任务结果。
 - `事件内部重试耗尽` 出现时，表示事件引擎内部验证码/网络重试预算已经用完，需要结合前序 retry 原因和机器人返回继续排查。
 - 失败任务如果出现 `事件引擎总超时`、`事件响应动作超时` 或 `历史补漏失败隔离`，说明还需要结合网络/RPC 日志继续观察。
 

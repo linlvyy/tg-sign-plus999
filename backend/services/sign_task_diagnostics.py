@@ -526,25 +526,25 @@ class SignTaskDiagnostics:
         result_status: str = "",
     ) -> list[DiagnosticCheck]:
         if "event_engine_success_matched" in events:
-            return [DiagnosticCheck("result_matched", "成功结果命中", "pass")]
+            return [DiagnosticCheck("result_matched", "结果关键词命中", "pass")]
         if "event_engine_checked_matched" in events:
-            return [DiagnosticCheck("result_matched", "已签到结果命中", "pass")]
+            return [DiagnosticCheck("result_matched", "结果关键词命中", "pass")]
         if result_status == "success":
             return [
                 DiagnosticCheck(
                     "result_matched",
-                    "成功结果命中",
+                    "结果关键词命中",
                     "pass",
-                    "最终状态记录了成功结果。",
+                    "最终状态记录了结果关键词命中。",
                 )
             ]
         if result_status == "checked":
             return [
                 DiagnosticCheck(
                     "result_matched",
-                    "已签到结果命中",
+                    "结果关键词命中",
                     "pass",
-                    "最终状态记录了已签到结果。",
+                    "最终状态记录了结果关键词命中。",
                 )
             ]
         return [
@@ -552,7 +552,7 @@ class SignTaskDiagnostics:
                 "result_matched",
                 "结果关键字命中",
                 "warn" if success else "fail",
-                "没有看到 event_engine_success_matched 或 event_engine_checked_matched。",
+                "没有看到 event_engine_success_matched。",
             )
         ]
 
@@ -1085,7 +1085,7 @@ class SignTaskDiagnostics:
                 "callback_text_progress",
                 "按钮弹窗状态推进",
                 "pass" if progressed else ("warn" if success else "fail"),
-                "" if progressed else "收到按钮弹窗文本，但后续没有看到结果、失败或重试事件。",
+                "" if progressed else "收到按钮弹窗文本，但后续没有看到结果或任务结束事件。",
             )
         ]
 
@@ -1279,7 +1279,7 @@ class SignTaskDiagnostics:
                     "no_ocr_after_result",
                     "结果命中后不再 OCR",
                     "fail",
-                    "成功/已签到后仍出现 event_engine_captcha_recognized。",
+                    "结果关键词命中后仍出现 event_engine_captcha_recognized。",
                 )
             ]
         return [DiagnosticCheck("no_ocr_after_result", "结果命中后不再 OCR", "pass")]

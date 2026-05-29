@@ -91,81 +91,7 @@ class EventRunSpec:
     click_by_calculation: bool = False
     click_by_poetry: bool = False
     success_keywords: list[str] = field(default_factory=list)
-    checked_keywords: list[str] = field(default_factory=list)
-    retry_keywords: list[str] = field(default_factory=list)
-    fail_keywords: list[str] = field(default_factory=list)
-    account_fail_keywords: list[str] = field(default_factory=list)
-    ignore_keywords: list[str] = field(default_factory=list)
     requires_result: bool = False
-
-
-DEFAULT_SUCCESS_KEYWORDS = ("签到成功", "成功", "通过", "完成", "获得")
-DEFAULT_CHECKED_KEYWORDS = ("签到过了", "已经签到", "已签到", "今天已经签到", "签过", "重复签到", "明日再来")
-DEFAULT_NEGATED_SUCCESS_KEYWORDS = (
-    "未通过",
-    "不通过",
-    "无法通过",
-    "未成功",
-    "不成功",
-    "未完成",
-    "没有完成",
-    "無法通過",
-    "未通過",
-    "不通過",
-)
-DEFAULT_FAIL_KEYWORDS = (
-    "失败",
-    "错误",
-    "验证码错误",
-    "网络错误",
-    "超时",
-    "未通过",
-    "不通过",
-    "无法通过",
-    "未成功",
-    "不成功",
-    "未完成",
-)
-DEFAULT_RETRY_HINTS = (
-    "验证码错误",
-    "网络错误",
-    "签到失败",
-    "验证失败",
-    "识别失败",
-    "校验失败",
-    "未通过",
-    "无法通过",
-    "未成功",
-    "未完成",
-)
-DEFAULT_ACCOUNT_FAIL_KEYWORDS = (
-    "拉黑",
-    "黑名单",
-    "冻结",
-    "未找到用户",
-    "无资格",
-    "退出群",
-    "退群",
-    "加群",
-    "加入群聊",
-    "请先关注",
-    "请先加入",
-    "請先加入",
-    "未注册",
-    "先注册",
-    "不存在",
-    "不在群组中",
-    "你有号吗",
-    "次数过多",
-    "尝试次数过多",
-    "嘗試次數過多",
-    "已尝试",
-    "已嘗試",
-    "过多",
-    "過多",
-    "操作过于频繁",
-    "操作過於頻繁",
-)
 
 
 def _read_float_env(name: str, default: float, minimum: float = 1.0) -> float:
@@ -240,6 +166,10 @@ def _extract_button_texts(message: Message) -> list[str]:
     return texts
 
 
+def _count_poetry_fill_blanks(text: str) -> int:
+    return len(re.findall(r"[░□＿_]", text or ""))
+
+
 def build_event_spec(chat: SignChatV3) -> EventRunSpec:
     spec = EventRunSpec()
     collecting_initial_sends = True
@@ -281,18 +211,8 @@ def build_event_spec(chat: SignChatV3) -> EventRunSpec:
         elif isinstance(action, AssertSuccessByTextAction):
             spec.requires_result = True
             spec.success_keywords.extend(action.keywords)
-            spec.checked_keywords.extend(action.checked_keywords)
-            spec.retry_keywords.extend(action.retry_keywords)
-            spec.fail_keywords.extend(action.fail_keywords)
-            spec.account_fail_keywords.extend(action.account_fail_keywords)
-            spec.ignore_keywords.extend(action.ignore_keywords)
     spec.click_texts = _dedupe(spec.click_texts)
     spec.success_keywords = _dedupe(spec.success_keywords)
-    spec.checked_keywords = _dedupe(spec.checked_keywords)
-    spec.retry_keywords = _dedupe(spec.retry_keywords)
-    spec.fail_keywords = _dedupe(spec.fail_keywords)
-    spec.account_fail_keywords = _dedupe(spec.account_fail_keywords)
-    spec.ignore_keywords = _dedupe(spec.ignore_keywords)
     spec.image_caption_patterns = _dedupe(spec.image_caption_patterns)
     spec.captcha_lengths = sorted(set(spec.captcha_lengths))
     spec.captcha_charsets = _dedupe(spec.captcha_charsets)
@@ -508,6 +428,7 @@ class SignEventRunner:
         self._final_state_logged = False
         self.attempt_epoch = 0
         self.stale_callback_texts = 0
+        self._last_response_action_should_advance = True
 
     def _retry_budget_remaining(self) -> int:
         return max(self.max_inline_retries - self.retry_count, 0)
@@ -528,119 +449,10 @@ class SignEventRunner:
                 return keyword
         return None
 
-    def _ignore_text(self, text: str) -> bool:
-        if keyword := self._text_matches(text, self.spec.ignore_keywords):
-            self.log(
-                f"事件引擎忽略消息关键字: {keyword}",
-                stage="message",
-                event="event_engine_ignored_keyword_matched",
-                meta={"chat_id": self.chat.chat_id, "keyword": keyword},
-            )
-            return True
-        return False
-
-    def _has_negated_success_text(self, text: str) -> bool:
-        return bool(self._text_matches(text, DEFAULT_NEGATED_SUCCESS_KEYWORDS))
-
-    def _log_failure_preempted_response_action(self, message: Message, action) -> None:
-        self.log(
-            "事件引擎在响应动作前命中失败/重试文本，跳过当前响应动作",
-            level="WARNING",
-            stage="result",
-            event="event_engine_failure_preempted_response_action",
-            meta={
-                "chat_id": self.chat.chat_id,
-                "message_id": getattr(message, "id", None),
-                "action": str(action),
-            },
-        )
-
-    def _classify_hard_failure_text(self, text: str) -> bool:
-        if not text or not self.spec.requires_result:
-            return False
-        if keyword := self._text_matches(text, self.spec.account_fail_keywords or DEFAULT_ACCOUNT_FAIL_KEYWORDS):
-            self.log(
-                f"事件引擎命中账户失败关键字: {keyword}",
-                level="WARNING",
-                stage="result",
-                event="event_engine_account_failed",
-                meta={"chat_id": self.chat.chat_id, "keyword": keyword},
-            )
-            self._finish(EventRunStatus.FAILED, f"matched account failure keyword: {keyword}")
-            return True
-        default_account_failure = self._text_matches(text, DEFAULT_ACCOUNT_FAIL_KEYWORDS)
-        if default_account_failure:
-            self.log(
-                f"事件引擎命中默认硬失败关键字: {default_account_failure}",
-                level="WARNING",
-                stage="result",
-                event="event_engine_account_failed",
-                meta={"chat_id": self.chat.chat_id, "keyword": default_account_failure},
-            )
-            self._finish(EventRunStatus.FAILED, f"matched account failure keyword: {default_account_failure}")
-            return True
-        return False
-
-    def _has_hard_failure_text(self, text: str) -> bool:
-        if not text or not self.spec.requires_result:
-            return False
-        return bool(
-            self._text_matches(text, self.spec.account_fail_keywords or DEFAULT_ACCOUNT_FAIL_KEYWORDS)
-            or self._text_matches(text, DEFAULT_ACCOUNT_FAIL_KEYWORDS)
-        )
-
-    def _has_retry_or_failure_text(self, text: str) -> bool:
-        if not text or not self.spec.requires_result:
-            return False
-        return bool(
-            self._has_hard_failure_text(text)
-            or self._text_matches(text, self.spec.retry_keywords or DEFAULT_RETRY_HINTS)
-            or self._text_matches(text, self.spec.fail_keywords or DEFAULT_FAIL_KEYWORDS)
-            or self._has_negated_success_text(text)
-        )
-
-    def _classify_failure_text(
-        self,
-        text: str,
-        *,
-        source: str = "",
-        message_id: int | None = None,
-    ) -> bool:
-        if not text or not self.spec.requires_result:
-            return False
-        match_meta = {
-            "chat_id": self.chat.chat_id,
-            "source": source,
-            "message_id": message_id,
-            **self._hard_timeout_context_meta(),
-        }
-        if keyword := self._text_matches(text, self.spec.retry_keywords or DEFAULT_RETRY_HINTS):
-            self._schedule_retry(
-                f"matched retry keyword: {keyword}",
-                source=source,
-                message_id=message_id,
-                trigger="retry_keyword",
-            )
-            return True
-        if keyword := self._text_matches(text, self.spec.fail_keywords or DEFAULT_FAIL_KEYWORDS):
-            self.log(
-                f"事件引擎命中失败关键字: {keyword}",
-                level="WARNING",
-                stage="result",
-                event="event_engine_failed_matched",
-                meta=match_meta | {"keyword": keyword},
-            )
-            self._finish(EventRunStatus.FAILED, f"matched failure keyword: {keyword}")
-            return True
-        return False
-
     def _classify_text(
         self,
         text: str,
         *,
-        include_failures: bool = True,
-        skip_hard_failures: bool = False,
-        allow_default_success: bool = True,
         source: str = "",
         message_id: int | None = None,
     ) -> bool:
@@ -652,39 +464,9 @@ class SignEventRunner:
             "message_id": message_id,
             **self._hard_timeout_context_meta(),
         }
-        if skip_hard_failures and self._text_matches(text, self.spec.account_fail_keywords or DEFAULT_ACCOUNT_FAIL_KEYWORDS):
-            return False
-        if skip_hard_failures and self._text_matches(text, DEFAULT_ACCOUNT_FAIL_KEYWORDS):
-            return False
-        if include_failures and self._ignore_text(text):
-            return True
-        if include_failures and self._classify_hard_failure_text(text):
-            return True
-        if keyword := self._text_matches(text, self.spec.checked_keywords or DEFAULT_CHECKED_KEYWORDS):
+        if keyword := self._text_matches(text, self.spec.success_keywords):
             self.log(
-                f"事件引擎命中已签到关键字: {keyword}",
-                level="success",
-                stage="result",
-                event="event_engine_checked_matched",
-                meta=match_meta | {"keyword": keyword},
-            )
-            self._finish(EventRunStatus.CHECKED, f"matched checked keyword: {keyword}")
-            return True
-        if include_failures:
-            if self._classify_failure_text(
-                text,
-                source=source,
-                message_id=message_id,
-            ):
-                return True
-        if self._has_negated_success_text(text):
-            return False
-        success_keywords = self.spec.success_keywords
-        if not success_keywords and allow_default_success:
-            success_keywords = list(DEFAULT_SUCCESS_KEYWORDS)
-        if keyword := self._text_matches(text, success_keywords):
-            self.log(
-                f"事件引擎命中成功关键字: {keyword}",
+                f"事件引擎命中结果关键字: {keyword}",
                 level="success",
                 stage="result",
                 event="event_engine_success_matched",
@@ -1759,6 +1541,7 @@ class SignEventRunner:
         options = extract_keyboard_options(message)
         if not text or not options:
             return False
+        pending_blanks = _count_poetry_fill_blanks(text)
         tools = await self._get_ai_tools_with_timeout(message, source="poetry_click")
         answer = clean_text_for_send(
             await self._call_ai_tool(
@@ -1783,6 +1566,8 @@ class SignEventRunner:
         )
         for candidate in _dedupe(candidates):
             if await self._click_button(message, candidate, trusted_timeout=False):
+                if pending_blanks > max(len(candidate), 1):
+                    self._last_response_action_should_advance = False
                 return True
         return False
 
@@ -2261,46 +2046,18 @@ class SignEventRunner:
                 meta={"chat_id": message.chat.id, "message_id": message.id},
             )
             text = get_message_text_content(message)
-            ignored = self._ignore_text(text)
             current_action = self._current_response_action()
-            if not ignored and self._classify_hard_failure_text(text):
-                self._mark_message_processed_for_attempt(version, attempt_epoch)
-                return
-            if not ignored and self._classify_text(
-                text,
-                include_failures=False,
-                allow_default_success=current_action is None,
-                source="realtime",
-                message_id=getattr(message, "id", None),
-            ):
-                self._mark_message_processed_for_attempt(version, attempt_epoch)
-                return
-            if (
-                isinstance(current_action, ReplyByImageRecognitionAction)
-                and not ignored
-            ):
-                if self._classify_hard_failure_text(text) or self._classify_failure_text(
-                    text,
-                    source="realtime",
-                    message_id=getattr(message, "id", None),
-                ):
-                    self._log_failure_preempted_response_action(message, current_action)
-                    self._mark_message_processed_for_attempt(version, attempt_epoch)
-                    return
-            retry_pending = self._retry_task and not self._retry_task.done()
-            if not retry_pending and await self._handle_current_response_action(message):
-                if self._mark_message_processed_for_attempt(version, attempt_epoch):
-                    self._track_history_rescue_message(message)
-                return
-            if ignored:
-                self._mark_message_processed_for_attempt(version, attempt_epoch)
-                return
             if self._classify_text(
                 text,
                 source="realtime",
                 message_id=getattr(message, "id", None),
             ):
                 self._mark_message_processed_for_attempt(version, attempt_epoch)
+                return
+            retry_pending = self._retry_task and not self._retry_task.done()
+            if not retry_pending and await self._handle_current_response_action(message):
+                if self._mark_message_processed_for_attempt(version, attempt_epoch):
+                    self._track_history_rescue_message(message)
                 return
             if await self._handle_unexpected_interaction(message):
                 self._mark_message_processed_for_attempt(version, attempt_epoch)
@@ -2769,6 +2526,7 @@ class SignEventRunner:
                 )
             return False
         try:
+            self._last_response_action_should_advance = True
             handled = await asyncio.wait_for(
                 self._execute_response_action(action, message),
                 timeout=self.action_timeout,
@@ -2806,7 +2564,8 @@ class SignEventRunner:
         if handled:
             source = "startup_history" if self._handling_startup_history else "realtime"
             retry_pending = bool(self._retry_task and not self._retry_task.done())
-            if not self.finished.is_set() and not retry_pending:
+            should_advance = self._last_response_action_should_advance
+            if not self.finished.is_set() and not retry_pending and should_advance:
                 self._advance_response_action(
                     action=action,
                     message=message,
@@ -2820,7 +2579,13 @@ class SignEventRunner:
                     action=action,
                     message=message,
                     source=source,
-                    reason="finished" if self.finished.is_set() else "retry_pending",
+                    reason=(
+                        "finished"
+                        if self.finished.is_set()
+                        else "retry_pending"
+                        if retry_pending
+                        else "poetry_fill_pending"
+                    ),
                 )
         return handled
 
@@ -3075,7 +2840,6 @@ class SignEventRunner:
             ]
             if ids:
                 self.history_rescue_min_message_id = max(ids)
-        startup_failure_skipped_ids: set[int] = set()
         result_scan_messages = messages if not rescue else ordered_messages
         for message in result_scan_messages:
             if self.finished.is_set():
@@ -3096,26 +2860,8 @@ class SignEventRunner:
                 continue
             if rescue and self._is_tracked_history_rescue_message(message):
                 self._log_tracked_history_recheck(message)
-            if self._ignore_text(get_message_text_content(message)):
-                continue
-            if not rescue and self._has_retry_or_failure_text(get_message_text_content(message)):
-                self._log_startup_history_failure_skipped(message)
-                message_id = getattr(message, "id", None)
-                if isinstance(message_id, int):
-                    startup_failure_skipped_ids.add(message_id)
-                self._finish_history_scan(
-                    source,
-                    scan_message_count,
-                    allowed_message_ids,
-                    handled_message_ids,
-                    status="skipped_failure",
-                )
-                return False
             if self._classify_text(
                 get_message_text_content(message),
-                include_failures=rescue,
-                skip_hard_failures=not rescue,
-                allow_default_success=not self.spec.response_actions,
                 source=source,
                 message_id=getattr(message, "id", None),
             ):
@@ -3139,11 +2885,6 @@ class SignEventRunner:
             message_id = getattr(message, "id", None)
             if isinstance(message_id, int):
                 allowed_message_ids.add(message_id)
-            if not rescue and isinstance(message_id, int) and message_id in startup_failure_skipped_ids:
-                continue
-            if not rescue and self._has_retry_or_failure_text(get_message_text_content(message)):
-                self._log_startup_history_failure_skipped(message)
-                continue
             if rescue and self._is_tracked_history_rescue_message(message):
                 self._log_tracked_history_recheck(message)
             version = message_version(message)
@@ -3271,20 +3012,6 @@ class SignEventRunner:
                 "allowed_count": allowed_count,
                 "handled_count": handled_count,
                 **self._hard_timeout_context_meta(),
-            },
-        )
-
-    def _log_startup_history_failure_skipped(self, message: Message) -> None:
-        self.history_scan_counts["hard_failures_skipped"] += 1
-        self.log(
-            "事件引擎跳过启动历史中的旧失败/重试消息",
-            stage="message",
-            event="event_engine_history_hard_failure_skipped",
-            meta={
-                "chat_id": self.chat.chat_id,
-                "message_id": getattr(message, "id", None),
-                "source": "startup",
-                "hard_failures_skipped": self.history_scan_counts["hard_failures_skipped"],
             },
         )
 

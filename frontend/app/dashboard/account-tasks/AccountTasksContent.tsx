@@ -542,16 +542,6 @@ type SuccessAssertionFormAction = {
     action: 9;
     keywords: string[];
     raw_input: string;
-    checked_keywords?: string[];
-    checked_raw_input?: string;
-    retry_keywords?: string[];
-    retry_raw_input?: string;
-    fail_keywords?: string[];
-    fail_raw_input?: string;
-    account_fail_keywords?: string[];
-    account_fail_raw_input?: string;
-    ignore_keywords?: string[];
-    ignore_raw_input?: string;
 };
 type TaskFormAction = Exclude<SignTaskAction, { action: 9; keywords: string[] }> | SuccessAssertionFormAction;
 
@@ -593,19 +583,9 @@ const defaultTaskAction = (): TaskFormAction => ({ action: 1, text: "" });
 const toSuccessKeywords = (value: string) => value.split("#").map((item) => item.trim()).filter(Boolean);
 const normalizeTaskActions = (actions: TaskFormAction[]): SignTaskAction[] => actions.map((action) => {
     if (isSuccessAssertionAction(action)) {
-        const checkedKeywords = toSuccessKeywords(action.checked_raw_input || "");
-        const retryKeywords = toSuccessKeywords(action.retry_raw_input || "");
-        const failKeywords = toSuccessKeywords(action.fail_raw_input || "");
-        const accountFailKeywords = toSuccessKeywords(action.account_fail_raw_input || "");
-        const ignoreKeywords = toSuccessKeywords(action.ignore_raw_input || "");
         return {
             action: 9,
             keywords: toSuccessKeywords(action.raw_input),
-            ...(checkedKeywords.length > 0 ? { checked_keywords: checkedKeywords } : {}),
-            ...(retryKeywords.length > 0 ? { retry_keywords: retryKeywords } : {}),
-            ...(failKeywords.length > 0 ? { fail_keywords: failKeywords } : {}),
-            ...(accountFailKeywords.length > 0 ? { account_fail_keywords: accountFailKeywords } : {}),
-            ...(ignoreKeywords.length > 0 ? { ignore_keywords: ignoreKeywords } : {}),
         };
     }
     if (action.action === 6) {
@@ -628,11 +608,6 @@ const toTaskFormAction = (action: SignTaskAction): TaskFormAction => {
         return {
             ...action,
             raw_input: action.keywords.join(" # "),
-            checked_raw_input: (action.checked_keywords || []).join(" # "),
-            retry_raw_input: (action.retry_keywords || []).join(" # "),
-            fail_raw_input: (action.fail_keywords || []).join(" # "),
-            account_fail_raw_input: (action.account_fail_keywords || []).join(" # "),
-            ignore_raw_input: (action.ignore_keywords || []).join(" # "),
         };
     }
     if (action.action === 6) {
@@ -2774,16 +2749,6 @@ export default function AccountTasksContent() {
                                                         action: 9,
                                                         keywords: currentKeywords,
                                                         raw_input: currentRawInput,
-                                                        checked_keywords: isSuccessAssertionAction(currentAction) ? currentAction.checked_keywords || [] : [],
-                                                        checked_raw_input: isSuccessAssertionAction(currentAction) ? currentAction.checked_raw_input || "" : "",
-                                                        retry_keywords: isSuccessAssertionAction(currentAction) ? currentAction.retry_keywords || [] : [],
-                                                        retry_raw_input: isSuccessAssertionAction(currentAction) ? currentAction.retry_raw_input || "" : "",
-                                                        fail_keywords: isSuccessAssertionAction(currentAction) ? currentAction.fail_keywords || [] : [],
-                                                        fail_raw_input: isSuccessAssertionAction(currentAction) ? currentAction.fail_raw_input || "" : "",
-                                                        account_fail_keywords: isSuccessAssertionAction(currentAction) ? currentAction.account_fail_keywords || [] : [],
-                                                        account_fail_raw_input: isSuccessAssertionAction(currentAction) ? currentAction.account_fail_raw_input || "" : "",
-                                                        ignore_keywords: isSuccessAssertionAction(currentAction) ? currentAction.ignore_keywords || [] : [],
-                                                        ignore_raw_input: isSuccessAssertionAction(currentAction) ? currentAction.ignore_raw_input || "" : "",
                                                     };
                                                 }
                                                 const nextActionId = currentActionId === 5 || currentActionId === 7 ? currentActionId : 5;
@@ -2990,7 +2955,7 @@ export default function AccountTasksContent() {
                                         ) : null}
 
                                         {action.action === 9 ? (
-                                            <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
+                                            <div className="grid grid-cols-1 gap-2">
                                                 <Input
                                                     placeholder={assertSuccessPlaceholder}
                                                     className="h-10"
@@ -3002,76 +2967,6 @@ export default function AccountTasksContent() {
                                                             action: 9,
                                                             raw_input: rawInput,
                                                             keywords: toSuccessKeywords(rawInput),
-                                                        }));
-                                                    }}
-                                                />
-                                                <Input
-                                                    placeholder={language === "zh" ? "已签到关键词，可选，# 分隔" : "Checked keywords, optional, separated by #"}
-                                                    className="h-10"
-                                                    value={action.checked_raw_input || ""}
-                                                    onChange={(e) => {
-                                                        const rawInput = e.target.value;
-                                                        updateCurrentDialogAction(index, (currentAction) => ({
-                                                            ...(isSuccessAssertionAction(currentAction) ? currentAction : { action: 9, keywords: [], raw_input: "" }),
-                                                            action: 9,
-                                                            checked_raw_input: rawInput,
-                                                            checked_keywords: toSuccessKeywords(rawInput),
-                                                        }));
-                                                    }}
-                                                />
-                                                <Input
-                                                    placeholder={language === "zh" ? "重试关键词，可选，# 分隔" : "Retry keywords, optional, separated by #"}
-                                                    className="h-10"
-                                                    value={action.retry_raw_input || ""}
-                                                    onChange={(e) => {
-                                                        const rawInput = e.target.value;
-                                                        updateCurrentDialogAction(index, (currentAction) => ({
-                                                            ...(isSuccessAssertionAction(currentAction) ? currentAction : { action: 9, keywords: [], raw_input: "" }),
-                                                            action: 9,
-                                                            retry_raw_input: rawInput,
-                                                            retry_keywords: toSuccessKeywords(rawInput),
-                                                        }));
-                                                    }}
-                                                />
-                                                <Input
-                                                    placeholder={language === "zh" ? "失败关键词，可选，# 分隔" : "Failure keywords, optional, separated by #"}
-                                                    className="h-10"
-                                                    value={action.fail_raw_input || ""}
-                                                    onChange={(e) => {
-                                                        const rawInput = e.target.value;
-                                                        updateCurrentDialogAction(index, (currentAction) => ({
-                                                            ...(isSuccessAssertionAction(currentAction) ? currentAction : { action: 9, keywords: [], raw_input: "" }),
-                                                            action: 9,
-                                                            fail_raw_input: rawInput,
-                                                            fail_keywords: toSuccessKeywords(rawInput),
-                                                        }));
-                                                    }}
-                                                />
-                                                <Input
-                                                    placeholder={language === "zh" ? "账号异常关键词，可选，# 分隔" : "Account failure keywords, optional, separated by #"}
-                                                    className="h-10"
-                                                    value={action.account_fail_raw_input || ""}
-                                                    onChange={(e) => {
-                                                        const rawInput = e.target.value;
-                                                        updateCurrentDialogAction(index, (currentAction) => ({
-                                                            ...(isSuccessAssertionAction(currentAction) ? currentAction : { action: 9, keywords: [], raw_input: "" }),
-                                                            action: 9,
-                                                            account_fail_raw_input: rawInput,
-                                                            account_fail_keywords: toSuccessKeywords(rawInput),
-                                                        }));
-                                                    }}
-                                                />
-                                                <Input
-                                                    placeholder={language === "zh" ? "忽略关键词，可选，# 分隔" : "Ignore keywords, optional, separated by #"}
-                                                    className="h-10 lg:col-span-2"
-                                                    value={action.ignore_raw_input || ""}
-                                                    onChange={(e) => {
-                                                        const rawInput = e.target.value;
-                                                        updateCurrentDialogAction(index, (currentAction) => ({
-                                                            ...(isSuccessAssertionAction(currentAction) ? currentAction : { action: 9, keywords: [], raw_input: "" }),
-                                                            action: 9,
-                                                            ignore_raw_input: rawInput,
-                                                            ignore_keywords: toSuccessKeywords(rawInput),
                                                         }));
                                                     }}
                                                 />
