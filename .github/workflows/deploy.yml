@@ -6,13 +6,14 @@ on:
     types: [published]  # 新 release 发布时触发
 
 jobs:
-  build-and-push:
+  prepare:
     runs-on: ubuntu-latest
 
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v5
+    outputs:
+      latest_tag: ${{ steps.get_latest_tag.outputs.latest_tag }}
+      should_build: ${{ steps.compare_versions.outputs.should_build }}
 
+    steps:
       - name: Get latest release tag
         id: get_latest_tag
         env:
@@ -58,32 +59,108 @@ jobs:
             echo "should_build=false" >> $GITHUB_OUTPUT
           fi
 
+  build-image:
+    needs: prepare
+    if: needs.prepare.outputs.should_build == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            platform_name: linux-amd64
+            runner: ubuntu-latest
+          - platform: linux/arm64
+            platform_name: linux-arm64
+            runner: ubuntu-24.04-arm
+
+    runs-on: ${{ matrix.runner }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
       - name: Set up Docker Buildx
-        if: steps.compare_versions.outputs.should_build == 'true'
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@v4
 
       - name: Log in to Docker Hub
-        if: steps.compare_versions.outputs.should_build == 'true'
-        uses: docker/login-action@v2
+        uses: docker/login-action@v4
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Build and push Docker image
-        if: steps.compare_versions.outputs.should_build == 'true'
-        uses: docker/build-push-action@v4
+      - name: Build and push image by digest
+        id: build
+        uses: docker/build-push-action@v7
         with:
-          platforms: linux/amd64,linux/arm64
-          push: true
+          context: .
+          platforms: ${{ matrix.platform }}
+          outputs: type=image,name=${{ secrets.DOCKER_USERNAME }}/tg-sign-plus,push-by-digest=true,name-canonical=true,push=true
           build-args: |
-            APP_VERSION=${{ steps.get_latest_tag.outputs.latest_tag }}
-          tags: |
-            ${{ secrets.DOCKER_USERNAME }}/tg-sign-plus:latest
-            ${{ secrets.DOCKER_USERNAME }}/tg-sign-plus:${{ steps.get_latest_tag.outputs.latest_tag }}
+            APP_VERSION=${{ needs.prepare.outputs.latest_tag }}
+          cache-from: type=gha,scope=tg-sign-plus-${{ matrix.platform_name }}
+          cache-to: type=gha,scope=tg-sign-plus-${{ matrix.platform_name }},mode=max
+
+      - name: Export image digest
+        run: |
+          mkdir -p /tmp/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+
+      - name: Upload image digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ matrix.platform_name }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  publish-manifest:
+    needs:
+      - prepare
+      - build-image
+    if: needs.prepare.outputs.should_build == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download image digests
+        uses: actions/download-artifact@v4
+        with:
+          path: /tmp/digests
+          pattern: digests-*
+          merge-multiple: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Create and push multi-arch manifest
+        working-directory: /tmp/digests
+        env:
+          IMAGE_NAME: ${{ secrets.DOCKER_USERNAME }}/tg-sign-plus
+          IMAGE_TAG: ${{ needs.prepare.outputs.latest_tag }}
+        run: |
+          docker buildx imagetools create \
+            -t "$IMAGE_NAME:latest" \
+            -t "$IMAGE_NAME:$IMAGE_TAG" \
+            $(printf "$IMAGE_NAME@sha256:%s " *)
+
+      - name: Inspect published image
+        env:
+          IMAGE_NAME: ${{ secrets.DOCKER_USERNAME }}/tg-sign-plus
+          IMAGE_TAG: ${{ needs.prepare.outputs.latest_tag }}
+        run: |
+          docker buildx imagetools inspect "$IMAGE_NAME:$IMAGE_TAG"
 
   trigger-render-deployment:
     needs:
-      - build-and-push
+      - prepare
+      - publish-manifest
+    if: needs.prepare.outputs.should_build == 'true'
     runs-on: ubuntu-latest
 
     permissions:
@@ -132,10 +209,12 @@ jobs:
               "$(echo "$target" | jq -r 'if type == "object" then (.name // "default") else "default" end')" \
               "$(echo "$target" | jq -r 'if type == "object" then (.hook_url // .url // empty) else empty end')"
           done
-          
+
   cleanup-runs:
     runs-on: ubuntu-latest
-    needs: trigger-render-deployment  # 确保在 build-and-push 任务完成后执行
+    needs:
+      - trigger-render-deployment  # 确保在部署任务完成后执行
+    if: always()
     permissions:
       actions: write  # 需要 write 权限来删除运行日志
       contents: read  # 需要 read 权限来访问仓库信息
