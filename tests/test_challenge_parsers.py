@@ -2,6 +2,8 @@ import unittest
 
 from tg_signer.challenge_parsers import (
     clean_captcha_ocr_text,
+    is_captcha_result_caption,
+    is_probable_captcha_prompt_caption,
     parse_ordered_button_challenge,
 )
 from tg_signer.event_runner import (
@@ -43,6 +45,27 @@ class ChallengeParserTests(unittest.TestCase):
         self.assertEqual(clean_captcha_ocr_text("Gk GX"), "GkGX")
         self.assertEqual(clean_captcha_ocr_text("验证码是： Gk GX"), "GkGX")
         self.assertEqual(clean_captcha_ocr_text("```text\npf b A\n```"), "pfbA")
+
+    def test_captcha_prompt_caption_uses_generic_marker(self):
+        self.assertTrue(is_probable_captcha_prompt_caption("验证码"))
+        self.assertTrue(
+            is_probable_captcha_prompt_caption(
+                "请输入验证码（不区分大小写）："
+            )
+        )
+        self.assertTrue(is_probable_captcha_prompt_caption("Captcha:"))
+        self.assertTrue(is_probable_captcha_prompt_caption(None))
+
+    def test_captcha_result_caption_is_not_ocr_input(self):
+        self.assertTrue(is_captcha_result_caption("验证码错误!"))
+        self.assertFalse(is_probable_captcha_prompt_caption("验证码错误!"))
+        self.assertFalse(is_probable_captcha_prompt_caption("验证码已过期"))
+        self.assertFalse(is_probable_captcha_prompt_caption("验证成功"))
+        self.assertFalse(
+            is_probable_captcha_prompt_caption(
+                "🍉欢迎使用 Peach Bot，请选择功能"
+            )
+        )
 
     def test_callback_blocking_text_is_not_success(self):
         self.assertTrue(

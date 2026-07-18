@@ -29,6 +29,27 @@ _OCR_PREFIX_RE = re.compile(
     r"(?:\s+in\s+the\s+image)?\s*(?:is|[:：=])*\s*)",
     re.IGNORECASE,
 )
+_CAPTCHA_PROMPT_MARKERS = (
+    "验证码",
+    "captcha",
+    "verification code",
+    "verify code",
+)
+_CAPTCHA_RESULT_MARKERS = (
+    "错误",
+    "失败",
+    "不正确",
+    "过期",
+    "失效",
+    "无效",
+    "成功",
+    "incorrect",
+    "wrong",
+    "failed",
+    "expired",
+    "invalid",
+    "success",
+)
 
 
 def normalize_button_symbol(value: str) -> str:
@@ -115,3 +136,24 @@ def clean_captcha_ocr_text(value: str) -> str:
             break
         text = cleaned
     return "".join(char for char in text if char.isalnum())
+
+
+def is_probable_captcha_prompt_caption(value: str | None) -> bool:
+    """Accept captcha prompt photos while rejecting status/result photos.
+
+    Caption-less photos remain supported for older bots. If a caption exists,
+    the default is deliberately conservative: it must mention a captcha/code
+    prompt and must not be an error, expiry, or success result.
+    """
+    text = unicodedata.normalize("NFKC", str(value or "")).strip().casefold()
+    if not text:
+        return True
+    if is_captcha_result_caption(text):
+        return False
+    return any(marker in text for marker in _CAPTCHA_PROMPT_MARKERS)
+
+
+def is_captcha_result_caption(value: str | None) -> bool:
+    """Return whether a caption describes a verification result, not a prompt."""
+    text = unicodedata.normalize("NFKC", str(value or "")).strip().casefold()
+    return bool(text) and any(marker in text for marker in _CAPTCHA_RESULT_MARKERS)

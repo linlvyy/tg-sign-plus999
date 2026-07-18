@@ -37,6 +37,8 @@ from tg_signer.config import (
 from .callback_actions import CallbackAnswerResult
 from .challenge_parsers import (
     clean_captcha_ocr_text,
+    is_captcha_result_caption,
+    is_probable_captcha_prompt_caption,
     parse_ordered_button_challenge,
 )
 from .message_helpers import extract_keyboard_options, get_message_text_content, message_version, readable_message
@@ -1634,10 +1636,14 @@ class SignEventRunner:
     async def _reply_image_captcha(self, message: Message) -> bool:
         if not message.photo:
             return False
+        if is_captcha_result_caption(message.caption):
+            return False
         if self.spec.image_caption_patterns:
             caption = message.caption or ""
             if not any(re.search(pattern, caption) for pattern in self.spec.image_caption_patterns):
                 return False
+        elif not is_probable_captcha_prompt_caption(message.caption):
+            return False
         version = message_version(message)
         if version in self.sent_captcha_versions:
             return False

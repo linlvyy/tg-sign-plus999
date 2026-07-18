@@ -1055,7 +1055,9 @@ export default function AccountTasksContent() {
     const assertSuccessPlaceholder = isZh ? "\u591A\u4E2A\u5173\u952E\u5B57\u7528 # \u5206\u9694" : "Separate keywords with #";
     const aiVisionSendModeLabel = isZh ? "\u8BC6\u56FE\u540E\u53D1\u6587\u672C" : "Vision -> Send Text";
     const aiVisionClickModeLabel = isZh ? "识图或按方向点图标" : "Vision / Ordered Icon Click";
-    const aiVisionCaptionPatternPlaceholder = isZh ? "caption 正则，如：请输入验证码" : "Caption regex, e.g. captcha";
+    const aiVisionCaptionPatternPlaceholder = isZh
+        ? "留空默认识别“验证码”，可填 caption 正则"
+        : "Blank: detect captcha/code; or enter caption regex";
     const aiVisionCaptchaLengthsPlaceholder = isZh ? "长度，如：4 或 4,5" : "Lengths, e.g. 4 or 4,5";
     const aiVisionCaptchaCharsetPlaceholder = isZh ? "允许字符，如：A-Z0-9" : "Allowed chars, e.g. A-Z0-9";
     const aiCalcSendModeLabel = isZh ? "\u8BA1\u7B97\u540E\u53D1\u6587\u672C" : "Math -> Send Text";
