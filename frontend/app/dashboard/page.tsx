@@ -132,7 +132,7 @@ export default function Dashboard() {
   const normalizeAccountName = useCallback((name: string) => name.trim(), []);
 
   const sanitizeAccountName = (name: string) =>
-    name.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 64);
+    name.replace(/[^A-Za-z0-9_\-\u3400-\u4DBF\u4E00-\u9FFF]/g, "").slice(0, 64);
 
   const isDuplicateAccountName = useCallback((name: string, allowedSameName?: string | null) => {
     const normalized = normalizeAccountName(name).toLowerCase();

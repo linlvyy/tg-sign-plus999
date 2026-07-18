@@ -651,7 +651,10 @@ class TelegramService:
                     try:
                         from backend.services.sign_tasks import get_sign_task_service
 
-                        await get_sign_task_service().refresh_account_chats(account_name)
+                        await asyncio.wait_for(
+                            get_sign_task_service().refresh_account_chats(account_name),
+                            timeout=30,
+                        )
                     except Exception:
                         pass
 
@@ -682,7 +685,10 @@ class TelegramService:
                         try:
                             from backend.services.sign_tasks import get_sign_task_service
 
-                            await get_sign_task_service().refresh_account_chats(account_name)
+                            await asyncio.wait_for(
+                                get_sign_task_service().refresh_account_chats(account_name),
+                                timeout=30,
+                            )
                         except Exception:
                             pass
 

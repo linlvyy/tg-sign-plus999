@@ -10,8 +10,13 @@ import re
 from backend.core.constants import PASSWORD_MIN_LENGTH
 
 
-# 账号名模式：仅允许字母、数字、下划线、连字符，长度 1-64
-ACCOUNT_NAME_PATTERN = re.compile(r'^[a-zA-Z0-9_-]{1,64}$')
+# 账号名模式：允许中英文、数字、下划线、连字符，长度 1-64
+ACCOUNT_NAME_PATTERN = re.compile(
+    r'^[a-zA-Z0-9_\-\u3400-\u4DBF\u4E00-\u9FFF]{1,64}$'
+)
+
+# 管理员用户名保持原有的 ASCII 安全规则
+USERNAME_PATTERN = re.compile(r'^[a-zA-Z0-9_-]{1,64}$')
 
 # 任务名模式：仅允许字母、数字、下划线、连字符，长度 1-128
 TASK_NAME_PATTERN = re.compile(r'^[a-zA-Z0-9_-]{1,128}$')
@@ -39,7 +44,7 @@ def validate_account_name(name: str) -> str:
 
     if not ACCOUNT_NAME_PATTERN.match(name):
         raise ValidationError(
-            "账号名只能包含字母、数字、下划线和连字符，长度 1-64"
+            "账号名只能包含中文、英文字母、数字、下划线和连字符，长度 1-64"
         )
 
     return name
@@ -119,8 +124,7 @@ def validate_username(username: str) -> str:
     if not username or not isinstance(username, str):
         raise ValidationError("用户名不能为空")
 
-    # 用户名使用与账号名相同的规则
-    if not ACCOUNT_NAME_PATTERN.match(username):
+    if not USERNAME_PATTERN.match(username):
         raise ValidationError(
             "用户名只能包含字母、数字、下划线和连字符，长度 1-64"
         )
