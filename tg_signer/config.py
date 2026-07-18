@@ -199,7 +199,7 @@ class SupportAction(int, Enum):
     SEND_TEXT = 1  # 发送普通文本
     SEND_DICE = 2  # 发送Dice类型的emoji
     CLICK_KEYBOARD_BY_TEXT = 3  # 根据文本点击键盘
-    CHOOSE_OPTION_BY_IMAGE = 4  # 根据图片选择选项
+    CHOOSE_OPTION_BY_IMAGE = 4  # 根据图片选择选项或按方向点击图标序列
     REPLY_BY_CALCULATION_PROBLEM = 5  # 回复计算题
     REPLY_BY_IMAGE_RECOGNITION = 6  # AI image recognition then send text
     CLICK_BUTTON_BY_CALCULATION_PROBLEM = 7  # AI calculation then click button
@@ -212,7 +212,7 @@ class SupportAction(int, Enum):
             SupportAction.SEND_TEXT: "发送普通文本",
             SupportAction.SEND_DICE: "发送Dice类型的emoji",
             SupportAction.CLICK_KEYBOARD_BY_TEXT: "根据文本点击键盘",
-            SupportAction.CHOOSE_OPTION_BY_IMAGE: "根据图片选择选项",
+            SupportAction.CHOOSE_OPTION_BY_IMAGE: "识图选择或按方向点击图标",
             SupportAction.REPLY_BY_CALCULATION_PROBLEM: "回复计算题",
             SupportAction.REPLY_BY_IMAGE_RECOGNITION: "AI image recognition then send text",
             SupportAction.CLICK_BUTTON_BY_CALCULATION_PROBLEM: "AI calculation then click button",

@@ -56,8 +56,8 @@ gui = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/amchii/tg-signer"
-Repository = "https://github.com/amchii/tg-signer"
+Homepage = "https://github.com/linlvyy/tg-sign-plus999"
+Repository = "https://github.com/linlvyy/tg-sign-plus999"
 
 [project.scripts]
 tg-signer = "tg_signer.__main__:signer"

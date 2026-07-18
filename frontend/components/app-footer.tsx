@@ -7,12 +7,12 @@ export function AppFooter() {
         <span>© 2026 TG Sign Plus</span>
         <span>|</span>
         <Link
-          href="https://github.com/ssfun/tg-sign-plus"
+          href="https://github.com/linlvyy/tg-sign-plus999"
           target="_blank"
           rel="noreferrer"
           className="transition-colors hover:text-[var(--text-primary)]"
         >
-          @sfun
+          @linlvyy
         </Link>
       </div>
     </footer>

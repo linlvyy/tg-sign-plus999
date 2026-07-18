@@ -1,1 +1,7 @@
 tests/
+!tests/
+tests/*
+!tests/test_challenge_parsers.py
+frontend/node_modules/
+frontend/.next/
+frontend/out/

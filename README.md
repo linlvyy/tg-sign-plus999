@@ -104,8 +104,8 @@ TG-Sign-Plus 是一个基于 Telegram 的自动化任务管理平台，提供 We
 #### 1. 克隆项目
 
 ```bash
-git clone https://github.com/ssfun/tg-sign-plus.git
-cd tg-sign-plus
+git clone https://github.com/linlvyy/tg-sign-plus999.git
+cd tg-sign-plus999
 ```
 
 #### 2. 安装后端依赖
@@ -151,7 +151,7 @@ version: '3.8'
 
 services:
   tg-signer:
-    image: sfun/tg-sign-plus:latest
+    image: YOUR_DOCKERHUB_USERNAME/tg-sign-plus:latest
     container_name: tg-sign-plus
     ports:
       - "8080:8080"
@@ -192,7 +192,7 @@ docker run -d \
   -e TG_API_HASH=your-api-hash \
   -e TZ=Asia/Shanghai \
   --restart unless-stopped \
-  sfun/tg-sign-plus:latest
+  YOUR_DOCKERHUB_USERNAME/tg-sign-plus:latest
 ```
 
 如果使用 `http://服务器IP:8080` 或局域网 IP 直接访问，请保持
@@ -205,8 +205,8 @@ docker run -d \
 
 ```bash
 # 克隆项目
-git clone https://github.com/ssfun/tg-sign-plus.git
-cd tg-sign-plus
+git clone https://github.com/linlvyy/tg-sign-plus999.git
+cd tg-sign-plus999
 
 # 构建镜像
 docker build -t tg-sign-plus:custom .
@@ -433,12 +433,17 @@ tg-signer list my_account
 | `1` | 发送文本 | `text`: 要发送的文本 |
 | `2` | 发送骰子 | `dice`: 骰子表情（🎲/🎯/🏀/⚽/🎳/🎰） |
 | `3` | 点击键盘按钮 | `text`: 按钮文本 |
-| `4` | AI 图片识别选择 | 无 |
+| `4` | AI 图片识别选择；或识别“从左到右/从右到左”并按方向连续点击图标 | 无 |
 | `5` | AI 回复计算题 | 无 |
-| `6` | AI 图片文字识别并回复 | 可选 `caption_pattern`: 图片 caption 正则；可选 `captcha_lengths`: 验证码长度列表；可选 `captcha_charset`: 允许字符；可选 `captcha_case`: `preserve`/`upper`/`lower`；可选 `reply_to_message`: 是否回复到验证码图片消息 |
+| `6` | AI 图片文字识别并回复（自动去除空格、标点和说明，只发送验证码字符） | 可选 `caption_pattern`: 图片 caption 正则；可选 `captcha_lengths`: 验证码长度列表；可选 `captcha_charset`: 允许字符；可选 `captcha_case`: `preserve`/`upper`/`lower`；可选 `reply_to_message`: 是否回复到验证码图片消息 |
 | `7` | AI 计算题点击按钮 | 无 |
 | `8` | AI 诗词填空点击按钮 | 无 |
 | `9` | 判断签到结果 | `keywords`: 结果关键词列表；命中任意关键词即视为完成 |
+
+动作 `4` 会优先检查题面是否明确包含“从左到右”或“从右到左”。
+识别到方向后，它只从冒号后的目标区提取实际存在于按钮键盘中的图标；
+“从右到左”会先反转屏幕目标顺序，再逐个发送按钮回调。题面未明确给出
+方向时不会猜测或点击。普通的图片单选题仍按原有 AI 识图逻辑处理。
 
 ### 签到执行引擎
 

@@ -220,14 +220,17 @@ class AITools:
         temperature=0.1,
     ) -> str:
         sys_prompt = (
-            "You are an OCR assistant. Extract the most relevant text from the image. "
-            "Return plain text only, no markdown, no explanation. "
-            "If the image contains a short code, captcha, verification code, or alphanumeric token, "
-            "output the characters continuously without spaces, line breaks, or separators."
+            "You are a captcha OCR engine. Return only the characters visibly printed "
+            "in the captcha image. Never add explanations, labels, quotes, markdown, "
+            "punctuation, or line breaks. Remove every visual gap between characters: "
+            "for example, an image showing 'Gk GX' must be returned exactly as 'GkGX'."
         )
         client = client or self.client
         model = model or self.default_model
-        text_query = query or "Extract the key text from this image."
+        text_query = query or (
+            "Read only the captcha characters in the image and concatenate them "
+            "without any spaces."
+        )
         messages = [
             {"role": "system", "content": sys_prompt},
             {

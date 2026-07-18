@@ -88,9 +88,9 @@ class ClickKeyboardAction(ActionBase):
 
 
 class ChooseOptionByImageAction(ActionBase):
-    """AI 图片识别动作"""
+    """AI 图片识别或按方向点击图标序列动作"""
 
-    action: int = Field(4, description="动作类型：4=AI 图片识别")
+    action: int = Field(4, description="动作类型：4=AI 图片识别或按方向点击图标")
 
 
 class ReplyByCalculationAction(ActionBase):

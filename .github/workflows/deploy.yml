@@ -22,7 +22,7 @@ jobs:
           if [ -n "$RELEASE_TAG" ]; then
             LATEST_TAG="$RELEASE_TAG"
           else
-            LATEST_TAG=$(curl -s https://api.github.com/repos/ssfun/tg-sign-plus/releases/latest | grep -oP '"tag_name": "\K(.*)(?=")')
+            LATEST_TAG=$(curl -s "https://api.github.com/repos/${{ github.repository }}/releases/latest" | grep -oP '"tag_name": "\K(.*)(?=")')
           fi
           echo "Latest tag: $LATEST_TAG"
           echo "latest_tag=$LATEST_TAG" >> $GITHUB_OUTPUT

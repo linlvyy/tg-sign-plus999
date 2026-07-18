@@ -5,7 +5,6 @@ import hashlib
 import os
 import random
 import re
-import string
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
@@ -36,6 +35,10 @@ from tg_signer.config import (
 )
 
 from .callback_actions import CallbackAnswerResult
+from .challenge_parsers import (
+    clean_captcha_ocr_text,
+    parse_ordered_button_challenge,
+)
 from .message_helpers import extract_keyboard_options, get_message_text_content, message_version, readable_message
 from .text_cleaners import clean_text_for_match, clean_text_for_send
 from tg_signer_contracts.errors import BusinessRetryableError
@@ -698,7 +701,17 @@ class SignEventRunner:
             target = clean_text_for_match(action.text)
             return bool(target and any(target in clean_text_for_match(button) for button in _extract_button_texts(message)))
         if isinstance(action, ChooseOptionByImageAction):
-            return bool(message.photo and _extract_button_texts(message))
+            buttons = _extract_button_texts(message)
+            return bool(
+                buttons
+                and (
+                    message.photo
+                    or parse_ordered_button_challenge(
+                        get_message_text_content(message),
+                        buttons,
+                    )
+                )
+            )
         if isinstance(action, ReplyByCalculationProblemAction):
             return bool(get_message_text_content(message))
         if isinstance(action, (ClickButtonByCalculationProblemAction, ClickButtonByPoetryFillAction)):
@@ -1236,7 +1249,7 @@ class SignEventRunner:
 
     async def _choose_option_by_image(self, message: Message) -> bool:
         reply_markup = message.reply_markup
-        if not (message.photo and isinstance(reply_markup, InlineKeyboardMarkup)):
+        if not isinstance(reply_markup, InlineKeyboardMarkup):
             return False
         buttons = []
         for row in reply_markup.inline_keyboard:
@@ -1260,6 +1273,129 @@ class SignEventRunner:
                     continue
                 buttons.append(button)
         if not buttons:
+            return False
+        ordered_challenge = parse_ordered_button_challenge(
+            get_message_text_content(message),
+            (button.text for button in buttons),
+        )
+        if ordered_challenge is not None:
+            direction_label = (
+                "从右到左"
+                if ordered_challenge.direction == "right_to_left"
+                else "从左到右"
+            )
+            self.log(
+                f"事件引擎识别图标点击方向: {direction_label}",
+                stage="action",
+                event="event_engine_icon_direction_recognized",
+                meta={
+                    "chat_id": message.chat.id,
+                    "message_id": message.id,
+                    "direction": ordered_challenge.direction,
+                    "targets": list(ordered_challenge.targets),
+                },
+            )
+            for sequence_index, target_text in enumerate(
+                ordered_challenge.targets,
+                start=1,
+            ):
+                button = next(
+                    (candidate for candidate in buttons if candidate.text == target_text),
+                    None,
+                )
+                if button is None:
+                    self.log(
+                        f"事件引擎未找到图标按钮: {target_text}",
+                        level="WARNING",
+                        stage="action",
+                        event="event_engine_icon_button_not_found",
+                        meta={
+                            "chat_id": message.chat.id,
+                            "message_id": message.id,
+                            "target": target_text,
+                            "sequence_index": sequence_index,
+                        },
+                    )
+                    return False
+                version = (
+                    message_version(message),
+                    "ordered_icon",
+                    sequence_index,
+                    button.text,
+                    button.callback_data,
+                )
+                if version in self.clicked_versions:
+                    self._record_button_click_duplicate(
+                        message,
+                        button_text=button.text,
+                        source="ordered_icon",
+                    )
+                    return False
+                self.clicked_versions.add(version)
+                self.log(
+                    f"事件引擎按{direction_label}点击第 {sequence_index} 个图标: {button.text}",
+                    stage="action",
+                    event="event_engine_icon_button_clicked",
+                    meta={
+                        "chat_id": message.chat.id,
+                        "message_id": message.id,
+                        "direction": ordered_challenge.direction,
+                        "target": button.text,
+                        "sequence_index": sequence_index,
+                        "sequence_count": len(ordered_challenge.targets),
+                    },
+                )
+                try:
+                    callback_result = await self._request_button_callback(
+                        message=message,
+                        callback_data=button.callback_data,
+                        trusted_timeout=False,
+                        button_text=button.text,
+                        source="ordered_icon",
+                    )
+                except asyncio.CancelledError:
+                    self.clicked_versions.discard(version)
+                    raise
+                except (TimeoutError, asyncio.TimeoutError, errors.RPCError):
+                    self.clicked_versions.discard(version)
+                    raise
+                self._record_callback_result(
+                    callback_result,
+                    message=message,
+                    button_text=button.text,
+                    source="ordered_icon",
+                )
+                if not callback_result.confirmed:
+                    self.clicked_versions.discard(version)
+                    self._log_button_callback_unconfirmed(
+                        message=message,
+                        button_text=button.text,
+                        source="ordered_icon",
+                        callback_result=callback_result,
+                    )
+                    self._record_button_callback_released_for_retry(
+                        message=message,
+                        button_text=button.text,
+                        source="ordered_icon",
+                        callback_result=callback_result,
+                    )
+                    return False
+                if sequence_index < len(ordered_challenge.targets):
+                    await asyncio.sleep(random.uniform(0.15, 0.35))
+            self.log(
+                f"事件引擎已按{direction_label}完成图标序列点击",
+                level="success",
+                stage="action",
+                event="event_engine_icon_sequence_completed",
+                meta={
+                    "chat_id": message.chat.id,
+                    "message_id": message.id,
+                    "direction": ordered_challenge.direction,
+                    "target_count": len(ordered_challenge.targets),
+                },
+            )
+            return True
+        if not message.photo:
             return False
         image_buffer = await self._download_message_media(message, source="image_option")
         image_buffer.seek(0)
@@ -1404,8 +1540,7 @@ class SignEventRunner:
                 },
             )
             return True
-        text = clean_text_for_send(raw_text)
-        text = text.translate(str.maketrans("", "", string.punctuation)).replace(" ", "")
+        text = clean_captcha_ocr_text(raw_text)
         if self.spec.captcha_case == "upper":
             text = text.upper()
         elif self.spec.captcha_case == "lower":

@@ -8,6 +8,7 @@ from pyrogram.types import InlineKeyboardMarkup, Message
 
 from tg_signer.config import ClickKeyboardByTextAction, ChooseOptionByImageAction
 
+from .challenge_parsers import clean_captcha_ocr_text
 from .message_helpers import (
     extract_keyboard_options,
     get_message_text_content,
@@ -81,7 +82,7 @@ async def reply_by_image_recognition(
     image_buffer.seek(0)
     image_bytes = image_buffer.read()
     text = await get_ai_tools().extract_text_by_image(image_bytes)
-    text = clean_text_for_send(text)
+    text = clean_captcha_ocr_text(text)
     if not text:
         log(
             "AI 未识别到可发送文本",
