@@ -9,7 +9,7 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.109.2+-green.svg)](https://fastapi.tiangolo.com/)
 [![Next.js](https://img.shields.io/badge/Next.js-14.2+-black.svg)](https://nextjs.org/)
 
-[功能特性](#功能特性) • [快速开始](#快速开始) • [部署方式](#部署方式) • [使用文档](#使用文档) • [配置说明](#配置说明)
+[上游来源](#上游来源与派生说明) • [功能特性](#功能特性) • [快速开始](#快速开始) • [部署方式](#部署方式) • [使用文档](#使用文档) • [配置说明](#配置说明)
 
 </div>
 
@@ -18,6 +18,34 @@
 ## 📖 项目简介
 
 TG-Sign-Plus 是一个基于 Telegram 的自动化任务管理平台，提供 Web 管理界面和 CLI 工具，支持自动签到、消息监控、AI 智能回复等功能。
+
+### 🔗 上游来源与派生说明
+
+本项目是 [ssfun/tg-sign-plus](https://github.com/ssfun/tg-sign-plus) 的独立派生版本。感谢原作者 **ssfun** 及所有上游贡献者提供的基础实现。
+
+#### 引用基线
+
+| 项目 | 内容 |
+|---|---|
+| 原作者仓库 | [ssfun/tg-sign-plus](https://github.com/ssfun/tg-sign-plus) |
+| 引用版本 | 上游 `main` 提交 [`18cc41342b562780d152ea2e6b48aa9d40c506c2`](https://github.com/ssfun/tg-sign-plus/commit/18cc41342b562780d152ea2e6b48aa9d40c506c2)（该基线没有版本标签） |
+| 上游提交 | `Reduce sign task log noise` |
+| 上游提交日期 | 2026-06-25（Asia/Shanghai） |
+| 建立派生版本日期 | 2026-07-18（Asia/Shanghai） |
+| 独立维护仓库 | [linlvyy/tg-sign-plus999](https://github.com/linlvyy/tg-sign-plus999) |
+
+本仓库从上述提交开始独立维护，不保留指向上游的 Git remote，也不会自动同步或用上游更新覆盖本项目改动。上游项目与本项目后续版本、功能和支持范围彼此独立。
+
+#### 基线之后的主要改动
+
+- **有序图标验证码**：识别题面明确给出的“从左到右 / 从左往右”或“从右到左 / 从右往左”，按照目标序列逐个匹配并点击真实按钮；方向不明确时不会猜测。
+- **验证码安全处理**：避免把上一条功能菜单重复当成图片题；识别“未完成人机验证、验证码错误、选择失败”等弹窗，防止错误操作被误判为成功。
+- **图片文字验证码**：清理 OCR 返回内容中的空格、标点、Markdown 和说明文字，只发送图片里的验证码字符。
+- **中文账号名称**：Telegram 账号名称支持中文、英文字母、数字、下划线和连字符，同时保持管理员用户名原有的 ASCII 安全规则。
+- **账号登录可见性**：Session 保存成功后账号立即显示；修复登录清理期间空账号列表被缓存的问题。
+- **登录流程稳定性**：首次聊天列表刷新改为后台任务并设置超时，不再阻塞登录完成或导致主界面长期空白。
+- **独立项目标识**：仓库链接、页面页脚、项目元数据和发布工作流改为指向 `linlvyy/tg-sign-plus999`，避免依赖上游发布地址。
+- **回归测试**：增加有序图标方向、OCR 文本清理、失败弹窗、菜单去重、中文账号名和登录可见性测试。
 
 ### 核心能力
 
@@ -719,6 +747,7 @@ ruff check --fix .
 
 ## 🙏 致谢
 
+- [TG-Sign-Plus](https://github.com/ssfun/tg-sign-plus) by [ssfun](https://github.com/ssfun) - 本独立派生版本的直接上游，引用基线与后续改动详见[上游来源与派生说明](#上游来源与派生说明)
 - [tg-signer](https://github.com/amchii/tg-signer) by [amchii](https://github.com/amchii) - 本项目基于此项目进行重构与扩展
 - [TG-SignPulse](https://github.com/akasls/TG-SignPulse) by [akasls](https://github.com/akasls) - 本项目基于此项目进行重构与扩展
 - [Pyrogram](https://github.com/pyrogram/pyrogram) - Telegram MTProto API 客户端
